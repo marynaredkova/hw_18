@@ -1,0 +1,162 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import sklearn
+import statsmodels
+
+data = pd.read_csv('C:/Users/maryn/Downloads/my_phone.csv')
+data.head()
+
+data.shape
+
+data.describe()
+
+def EDA(data):
+    total_na = data.isna().sum().sum()
+    print("Dimensions : %d rows, %d columns" % (data.shape[0], data.shape[1]))
+    print("Total NA Values : %d " % (total_na))
+    print("%38s %10s     %10s %10s" % ("Column Name", "Data Type", "Count Distinct", "NA Values"))
+    col_name = data.columns
+    dtypes = data.dtypes
+    uniq = data.nunique()
+    na_val = data.isna().sum()
+    for i in range(len(data.columns)):
+        print("%38s %10s   %10s %10s" % (col_name[i], dtypes[i], uniq[i], na_val[i]))
+
+EDA(data)
+
+!pip install tensorflow
+
+import tensorflow as tf 
+from tensorflow import keras
+
+duplicates = data[data.duplicated()]
+
+duplicates
+
+data = data[['battery_power', 'weight', 'memory', 'n_cores', 'ram', 'pixel_height', 'pixel_width', 'price_range']]
+
+data.describe()
+
+data.loc[data['pixel_height']<=0]
+
+for column in data.columns:
+    median = data.loc[data[column]>0, column].median()
+    data[column] = np.where(data[column] <=0, median, data[column])
+data.describe()
+
+model = keras.Sequential()
+
+input_layer = keras.layers.Dense(7, input_shape = [7], activation = 'tanh') 
+model.add(input_layer)
+
+output_layer = keras.layers.Dense(1, activation = 'softmax')
+
+model.add(output_layer)
+
+model.compile(optimizer = 'adam', loss = 'categorical_crossentropy', metrics = ['accuracy'])
+
+data = data[data['price_range'] != 'NaN']
+data[data.iloc[:,:7]<= 0] = np.nan
+data = data.dropna()
+
+data
+
+from sklearn import preprocessing
+le = preprocessing.LabelEncoder()
+le.fit(data.price_range.unique())
+
+encoded_price_range = le.fit_transform(data.price_range)
+data['encoded_price_range'] = encoded_price_range
+data
+
+from sklearn.model_selection import train_test_split
+
+X = data.iloc[:, :7].to_numpy()
+Y = data.encoded_price_range.to_numpy()
+
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size = 0.2, random_state = 20)
+
+history = model.fit(X_train, Y_train,
+                   epochs = 300,
+                   steps_per_epoch = 20,
+                   validation_split = 0.3,
+                   batch_size = 35)
+
+
+loss, accuracy = model.evaluate(X_test, Y_test)
+print('Test score', loss)
+print('Test accuracy', accuracy)
+
+#не розумію, чому у мене Test score 0.0?
+
+import matplotlib.pyplot as plt
+
+def plot_metric(history, metric):
+    train_metrics = history.history[metric]
+    val_metrics = history.history['val_'+metric]
+    epochs = range(1, len(train_metrics) + 1)
+    plt.plot(epochs, train_metrics)
+    plt.plot(epochs, val_metrics)
+    plt.title('Training and validation '+ metric)
+    plt.xlabel("Epochs")
+    plt.ylabel(metric)
+    plt.legend(["train_"+metric, 'val_'+metric])
+    plt.show()
+
+plot_metric(history, 'loss')
+
+data = data.drop(columns=['encoded_price_range'])
+data
+
+one_hot_encoded_data = pd.get_dummies(data, columns = ['price_range'])
+one_hot_encoded_data
+
+model = keras.Sequential()
+
+input_layer = keras.layers.Dense(7, input_shape = [7], activation = 'tanh') 
+model.add(input_layer)
+
+output_layer = keras.layers.Dense(3, activation = 'softmax')
+
+model.add(output_layer)
+
+model.compile(optimizer = 'adam', loss = 'categorical_crossentropy', metrics = ['accuracy'])
+
+from sklearn.model_selection import train_test_split
+
+X = one_hot_encoded_data.iloc[:, :7].to_numpy()
+Y = one_hot_encoded_data.iloc[:,-3:].to_numpy()
+
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size = 0.2, random_state = 20)
+
+history = model.fit(X_train, Y_train,
+                   epochs = 800,
+                   steps_per_epoch = 50,
+                   validation_split = 0.3,
+                   batch_size = 45)
+
+loss, accuracy = model.evaluate(X_test, Y_test)
+print('Test score', loss)
+print('Test accuracy', accuracy)
+
+plot_metric(history, 'loss')
+
+from tensorflow.keras.callbacks import EarlyStopping
+early_stopping = EarlyStopping()
+
+history = model.fit(X_train, Y_train,
+                   epochs = 1200,
+                   steps_per_epoch = 50,
+                   validation_split = 0.3,
+                   batch_size = 45,
+                   callbacks = [early_stopping])
+
+loss, accuracy = model.evaluate(X_test, Y_test)
+print('Test score', loss)
+print('Test accuracy', accuracy)
+
+plot_metric(history, 'loss')
+
+#неочікувано графік повернувся в іншому напрямку. 
